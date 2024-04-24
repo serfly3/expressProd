@@ -1,41 +1,26 @@
-const { readData, writeData } = require("../utils/data"); // Чтение и запись данных в JSON-файл
+const { readData, writeData } = require("../utils/data");
 
-// Получим игры из JSON-файла и отправим в ответ на запрос
-const sendAllGames = async (req, res) => {};
-
-const deleteGame = async (req, res) => {
-  // Получим данные из файла
-
-  // Прочитаем запрашиваемый id игры из запроса
-  const id = Number(req.params.id);
-
-  // Найдём игру, которую хотят удалить, в общем массиве с играми по id
-  req.game = req.games.find((item) => item.id === id);
-
-  // Найдём индекс удаляемой игры в общем массиве игр
-  const index = req.games.findIndex((item) => item.id === req.game.id);
-
-  // Удалим из массива игр игру
-  req.games.splice(index, 1);
-
-  // Запишем обновлённый массив игр в JSON-файл
-  await writeData("./data/games.json", req.games);
-
-  // Вернём ответ о проделанной операции с данными о играх
-  res.send({
-    games: req.games,
-    updated: req.game,
-  });
+const getAllGames = async (req, res, next) => {
+  const games = await readData("./data/games.json");
+  if (!games) {
+    res.status(400);
+    res.send({
+      status: "error",
+      message: "Нет игр в базе данных. Добавь игру.",
+    });
+    return;
+  }
+  req.games = games;
+  next();
 };
 
-const addGameController = async (req, res) => {
-  // Read the data from the JSON file and assign it to the req.games array
-  req.games = await readData("./data/games.json");
-
+const checkIsTitleInArray = (req, res, next) => {
   req.isNew = !Boolean(req.games.find((item) => item.title === req.body.title));
-  // Если игра, которую хотим добавить, новая (её не было в списке)
+  next();
+};
+
+const updateGamesArray = (req, res, next) => {
   if (req.isNew) {
-    // Добавляем объект с данными о новой игре
     const inArray = req.games.map((item) => Number(item.id));
     let maximalId;
     if (inArray.length > 0) {
@@ -43,6 +28,7 @@ const addGameController = async (req, res) => {
     } else {
       maximalId = 0;
     }
+
     req.updatedObject = {
       id: maximalId + 1,
       title: req.body.title,
@@ -50,23 +36,50 @@ const addGameController = async (req, res) => {
       link: req.body.link,
       description: req.body.description,
     };
-    // Добавляем данные о новой игре в список с другими играми
     req.games = [...req.games, req.updatedObject];
+    next();
   } else {
     res.status(400);
     res.send({ status: "error", message: "Игра с таким именем уже есть." });
-    return;
   }
-  // Записываем обновлённый список игр в файл
+};
+
+const updateGamesFile = async (req, res, next) => {
   await writeData("./data/games.json", req.games);
-  // В качестве ответа отправляем объект с двумя полями
+  next();
+};
+
+const findGameById = (req, res, next) => {
+  const id = Number(req.params.id);
+  req.game = req.games.find((item) => item.id === id);
+  next();
+};
+
+const deleteGame = (req, res, next) => {
+  const id = req.game.id;
+  const index = req.games.findIndex((item) => item.id === id);
+  req.games.splice(index, 1);
+  next();
+};
+
+const sendAllGames = (req, res) => {
+  res.send(req.games);
+};
+
+const sendUpdatedGames = (req, res) => {
   res.send({
-    games: req.games, // Обновлённый список со всеми играми
-    updated: req.updatedObject, // Новая добавленная игра
+    games: req.games,
+    updated: req.updatedObject,
   });
 };
+
 module.exports = {
+  getAllGames,
+  checkIsTitleInArray,
+  updateGamesArray,
+  updateGamesFile,
+  findGameById,
   deleteGame,
   sendAllGames,
-  addGameController,
+  sendUpdatedGames,
 };
